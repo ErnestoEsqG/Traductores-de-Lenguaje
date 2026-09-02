@@ -1,0 +1,16 @@
+// Prueba de comentarios de línea
+/* 
+   Comentario de bloque
+   tradicional de JavaScript
+*/
+const calcularTotal = async (item_1, $descuento) => {
+    let precio = 199.99;
+    var cantidad = 3;
+    let mensaje = "Hola \"mundo\"";
+    let template = `Total calculado`;
+
+    if (item_1 !== null && cantidad >= 1) {
+        return (precio * cantidad) ** 2;
+    }
+    return undefined;
+};

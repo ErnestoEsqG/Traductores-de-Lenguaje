@@ -1,0 +1,49 @@
+/*
+PrimerApellido_SegundoApellido_Nombre(s)
+*/
+package lexico;
+
+import java_cup.runtime.*;
+
+/* -------------------------------------------------------------
+   TERMINALES: 50 PALABRAS RESERVADAS DE JAVASCRIPT
+   ------------------------------------------------------------- */
+terminal BREAK, CASE, CATCH, CLASS, CONST, CONTINUE, DEBUGGER, DEFAULT, DELETE, DO;
+terminal ELSE, EXPORT, EXTENDS, FINALLY, FOR, FUNCTION, IF, IMPORT, IN, INSTANCEOF;
+terminal NEW, RETURN, SUPER, SWITCH, THIS, THROW, TRY, TYPEOF, VAR, VOID;
+terminal WHILE, WITH, YIELD, LET, STATIC, ENUM, AWAIT, IMPLEMENTS, INTERFACE, PACKAGE;
+terminal PRIVATE, PROTECTED, PUBLIC, ASYNC, OF, GET, SET, CONSTRUCTOR, FROM, AS;
+
+/* -------------------------------------------------------------
+   TERMINALES: OPERADORES
+   ------------------------------------------------------------- */
+terminal PLUS, MINUS, MULT, DIV, MOD, EXP;
+terminal ASSIGN, PLUS_ASSIGN, MINUS_ASSIGN, MULT_ASSIGN, DIV_ASSIGN;
+terminal EQ, NEQ, EXACT_EQ, EXACT_NEQ;
+terminal LT, GT, LEQ, GEQ;
+terminal AND, OR, NOT;
+terminal ARROW, QUESTION;
+
+/* -------------------------------------------------------------
+   TERMINALES: DELIMITADORES Y SIGNOS
+   ------------------------------------------------------------- */
+terminal LPAREN, RPAREN, LBRACK, RBRACK, LBRACE, RBRACE;
+terminal SEMICOLON, COMMA, DOT, COLON;
+
+/* -------------------------------------------------------------
+   TERMINALES: LITERALES E IDENTIFICADORES
+   ------------------------------------------------------------- */
+terminal String IDENTIFIER;
+terminal Integer INT_LITERAL;
+terminal Double FLOAT_LITERAL;
+terminal String STRING_LITERAL;
+terminal String TEMPLATE_LITERAL;
+terminal Boolean BOOLEAN_LITERAL;
+terminal NULL_LITERAL, UNDEFINED_LITERAL;
+
+/* NO TERMINALES */
+non terminal inicio;
+
+start with inicio;
+
+inicio ::= ;
