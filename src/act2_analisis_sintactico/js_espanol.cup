@@ -1,0 +1,60 @@
+/*
+* ApellidoPaterno_ApellidoMaterno_Nombre
+*/
+package act2_analisis_sintactico;
+
+import java_cup.runtime.*;
+
+/* Los nombres deben coincidir con los tokens emitidos por LexicoJava. */
+terminal PACKAGE, IMPORT, CLASS, PUBLIC;
+terminal IDENTIFIER, DOT, SEMICOLON, MULT;
+terminal LBRACE, RBRACE;
+
+/* NO TERMINALES EN ESPAÑOL */
+non terminal inicio;
+non terminal archivo;
+non terminal paquete_opcional;
+non terminal lista_importaciones;
+non terminal importacion;
+non terminal clase_principal;
+non terminal lista_identificadores;
+
+/* REGLAS GRAMATICALES */
+start with inicio;
+
+inicio ::= archivo 
+    {: System.out.println("Regla reconocida: archivo"); :}
+    ;
+
+archivo ::= paquete_opcional lista_importaciones clase_principal
+    ;
+
+paquete_opcional ::= 
+    PACKAGE:paquet lista_identificadores SEMICOLON
+    {: System.out.println("Regla reconocida: paquete en la línea: " + (paquetleft + 1)); :}
+    | /* ε (opcional) */
+    ;
+
+lista_importaciones ::= 
+    lista_importaciones importacion
+    | /* ε (vacío) */
+    ;
+
+importacion ::= 
+    IMPORT:importar lista_identificadores SEMICOLON
+    {: System.out.println("Regla reconocida: importacion simple en la línea: " + (importarleft + 1)); :}
+    | IMPORT:importar lista_identificadores DOT MULT SEMICOLON
+    {: System.out.println("Regla reconocida: importacion multiple en la línea: " + (importarleft + 1)); :}
+    ;
+
+clase_principal ::= 
+    CLASS:clase IDENTIFIER LBRACE RBRACE
+    {: System.out.println("Regla reconocida: clase_principal en la línea: " + (claseleft + 1)); :}
+    | PUBLIC:publico CLASS:clase IDENTIFIER LBRACE RBRACE
+    {: System.out.println("Regla reconocida: clase_principal publica en la línea: " + (publicoleft + 1)); :}
+    ;
+
+lista_identificadores ::= 
+    IDENTIFIER
+    | lista_identificadores DOT IDENTIFIER
+    ;

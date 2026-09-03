@@ -1,4 +1,4 @@
-package lexico;
+package act1_analisis_lexico;
 
 import jflex.Main;
 

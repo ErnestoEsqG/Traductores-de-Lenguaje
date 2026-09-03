@@ -1,4 +1,4 @@
-package lexico;
+package act1_analisis_lexico;
 
 public class GeneradorCupSintantico {
     public static void main(String[] args) throws Exception {

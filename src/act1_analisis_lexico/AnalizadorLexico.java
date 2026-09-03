@@ -1,7 +1,7 @@
 /*
 PrimerApellido_SegundoApellido_Nombre(s)
 */
-package lexico;
+package act1_analisis_lexico;
 
 import java.io.BufferedReader;
 import java.io.FileReader;

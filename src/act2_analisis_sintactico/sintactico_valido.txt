@@ -1,0 +1,3 @@
+package mi.paquete.ejemplo;
+import java.util.Scanner;
+public class MiClase {}
