@@ -1,0 +1,7 @@
+class Persona {
+    int edad;
+    final int LIMITE;
+    String nombre, apellido;
+    double salario = ;
+    final double PI = 3.1416;
+}

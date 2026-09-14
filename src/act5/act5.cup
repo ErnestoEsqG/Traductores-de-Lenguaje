@@ -1,0 +1,156 @@
+package act5;
+
+import java_cup.runtime.*;
+
+parser code {:
+    private boolean fatal = false;
+
+    public boolean huboErrorFatal() {
+        return fatal;
+    }
+
+    @Override
+    public void report_error(String message, Object info) {
+        if (info instanceof Symbol) {
+            Symbol s = (Symbol) info;
+            System.out.println("Error sintáctico en línea " + s.left + ", columna " + s.right + ": se encontró '" + (s.value != null ? s.value : "#" + s.sym) + "'");
+        } else {
+            System.out.println("Error sintáctico: " + message);
+        }
+    }
+
+    @Override
+    public void report_fatal_error(String message, Object info) {
+        fatal = true;
+        if (info instanceof Symbol) {
+            Symbol s = (Symbol) info;
+            System.out.println("Error fatal en línea " + s.left + ", columna " + s.right + ": se encontró '" + (s.value != null ? s.value : "#" + s.sym) + "'");
+        } else {
+            System.out.println("Error fatal: " + message);
+        }
+    }
+:};
+
+/* TERMINALES */
+terminal PACKAGE, IMPORT, PUBLIC, CLASS, FINAL;
+terminal INT, FLOAT, DOUBLE, CHAR, BOOLEAN, STRING_TIPO;
+terminal PUNTO_COMA, COMA, IGUAL, PUNTO, ASTERISCO, LLAVE_IZQ, LLAVE_DER;
+terminal String IDENTIFICADOR, NUMERO_ENTERO, NUMERO_FLOTANTE, LITERAL_CADENA, LITERAL_CARACTER, VALOR_BOOLEANO;
+
+/* NO TERMINALES */
+non terminal inicio;
+non terminal declaracion_paquete;
+non terminal lista_importaciones, declaracion_importacion;
+non terminal declaracion_clase;
+non terminal nombre_cualificado;
+non terminal cuerpo_clase, miembro_clase;
+non terminal tipo, valor;
+non terminal declaracion_atributo, declaracion_constante;
+non terminal lista_identificadores;
+
+start with inicio;
+
+/* 1. Estructura general */
+inicio ::= declaracion_paquete lista_importaciones declaracion_clase
+         {: System.out.println("Análisis sintáctico finalizado correctamente"); :}
+       | lista_importaciones declaracion_clase
+         {: System.out.println("Análisis sintáctico finalizado correctamente"); :}
+       | declaracion_paquete declaracion_clase
+         {: System.out.println("Análisis sintáctico finalizado correctamente"); :}
+       | declaracion_clase
+         {: System.out.println("Análisis sintáctico finalizado correctamente"); :}
+       ;
+
+declaracion_paquete ::= PACKAGE nombre_cualificado PUNTO_COMA
+                      {: System.out.println("Paquete reconocido correctamente"); :}
+                    ;
+
+lista_importaciones ::= lista_importaciones declaracion_importacion
+                      | declaracion_importacion
+                      ;
+
+declaracion_importacion ::= IMPORT nombre_cualificado PUNTO_COMA
+                          {: System.out.println("Importación reconocida correctamente"); :}
+                        | IMPORT nombre_cualificado PUNTO ASTERISCO PUNTO_COMA
+                          {: System.out.println("Importación reconocida correctamente"); :}
+                        ;
+
+nombre_cualificado ::= IDENTIFICADOR
+                     | nombre_cualificado PUNTO IDENTIFICADOR
+                     ;
+
+/* 2. Definición de Clase y Cuerpo */
+declaracion_clase ::= PUBLIC CLASS IDENTIFICADOR LLAVE_IZQ LLAVE_DER
+                    {: 
+                       System.out.println("Clase principal reconocida correctamente");
+                       System.out.println("Clase vacía");
+                       System.out.println("Estructura de llaves válida");
+                    :}
+                  | CLASS IDENTIFICADOR LLAVE_IZQ LLAVE_DER
+                    {: 
+                       System.out.println("Clase principal reconocida correctamente");
+                       System.out.println("Clase vacía");
+                       System.out.println("Estructura de llaves válida");
+                    :}
+                  | PUBLIC CLASS IDENTIFICADOR LLAVE_IZQ cuerpo_clase LLAVE_DER
+                    {: 
+                       System.out.println("Clase principal reconocida correctamente");
+                       System.out.println("Clase con miembros");
+                       System.out.println("Estructura de llaves válida");
+                    :}
+                  | CLASS IDENTIFICADOR LLAVE_IZQ cuerpo_clase LLAVE_DER
+                    {: 
+                       System.out.println("Clase principal reconocida correctamente");
+                       System.out.println("Clase con miembros");
+                       System.out.println("Estructura de llaves válida");
+                    :}
+                  ;
+
+cuerpo_clase ::= cuerpo_clase miembro_clase
+               | miembro_clase
+               ;
+
+miembro_clase ::= declaracion_atributo
+                | declaracion_constante
+                | error PUNTO_COMA
+                  {: System.out.println("[Recuperación]: Declaración inválida recuperada en ';'"); :}
+                ;
+
+/* 3. Atributos y Variables */
+declaracion_atributo ::= tipo lista_identificadores PUNTO_COMA
+                       {: System.out.println("Declaración de atributo o variable reconocida"); :}
+                     | tipo IDENTIFICADOR IGUAL valor PUNTO_COMA
+                       {: System.out.println("Inicialización de variable o atributo reconocida"); :}
+                     | tipo IDENTIFICADOR IDENTIFICADOR PUNTO_COMA
+                       {: System.out.println("Error sintáctico: Falta ',' en declaración de identificadores"); :}
+                     ;
+
+lista_identificadores ::= lista_identificadores COMA IDENTIFICADOR
+                        {: System.out.println("Declaración múltiple: identificador reconocido"); :}
+                      | IDENTIFICADOR
+                        {: System.out.println("Identificador reconocido"); :}
+                      ;
+
+/* 4. Constantes */
+declaracion_constante ::= FINAL tipo IDENTIFICADOR IGUAL valor PUNTO_COMA
+                        {: System.out.println("Declaración de constante inicializada reconocida"); :}
+                      | FINAL tipo IDENTIFICADOR PUNTO_COMA
+                        {: System.out.println("Error sintáctico: Constante debe inicializarse obligatoriamente"); :}
+                      ;
+
+/* 5. Tipos y Valores */
+tipo ::= INT
+       | FLOAT
+       | DOUBLE
+       | CHAR
+       | BOOLEAN
+       | STRING_TIPO
+       | IDENTIFICADOR
+       ;
+
+valor ::= NUMERO_ENTERO
+        | NUMERO_FLOTANTE
+        | LITERAL_CADENA
+        | LITERAL_CARACTER
+        | VALOR_BOOLEANO
+        ;

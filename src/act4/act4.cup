@@ -1,0 +1,101 @@
+package act4;
+
+import java_cup.runtime.*;
+
+parser code {:
+    private boolean fatal = false;
+
+    public boolean huboErrorFatal() {
+        return fatal;
+    }
+
+    @Override
+    public void report_error(String message, Object info) {
+        if (info instanceof Symbol) {
+            Symbol s = (Symbol) info;
+            System.out.println("Error sintáctico en línea " + s.left + ", columna " + s.right + ": se encontró '" + (s.value != null ? s.value : "#" + s.sym) + "'");
+        } else {
+            System.out.println("Error sintáctico: " + message);
+        }
+    }
+
+    @Override
+    public void report_fatal_error(String message, Object info) {
+        fatal = true;
+        if (info instanceof Symbol) {
+            Symbol s = (Symbol) info;
+            System.out.println("Error fatal en línea " + s.left + ", columna " + s.right + ": se encontró '" + (s.value != null ? s.value : "#" + s.sym) + "'");
+        } else {
+            System.out.println("Error fatal: " + message);
+        }
+        System.out.println("El análisis no puede continuar debido a una estructura inválida.");
+    }
+:};
+
+/* Terminales */
+terminal PACKAGE, IMPORT, PUBLIC, CLASS;
+terminal PUNTO_COMA, PUNTO, ASTERISCO, LLAVE_IZQ, LLAVE_DER;
+terminal String IDENTIFICADOR;
+
+/* No Terminales */
+non terminal inicio;
+non terminal declaracion_paquete;
+non terminal lista_importaciones, declaracion_importacion;
+non terminal declaracion_clase;
+non terminal nombre_cualificado;
+
+start with inicio;
+
+inicio ::= declaracion_paquete lista_importaciones declaracion_clase
+         {: 
+            System.out.println("Estructura de llaves válida");
+            System.out.println("Análisis sintáctico finalizado correctamente"); 
+         :}
+       | lista_importaciones declaracion_clase
+         {: 
+            System.out.println("Estructura de llaves válida");
+            System.out.println("Análisis sintáctico finalizado correctamente"); 
+         :}
+       | declaracion_paquete declaracion_clase
+         {: 
+            System.out.println("Estructura de llaves válida");
+            System.out.println("Análisis sintáctico finalizado correctamente"); 
+         :}
+       | declaracion_clase
+         {: 
+            System.out.println("Estructura de llaves válida");
+            System.out.println("Análisis sintáctico finalizado correctamente"); 
+         :}
+       ;
+
+declaracion_paquete ::= PACKAGE nombre_cualificado PUNTO_COMA
+                      {: System.out.println("Paquete reconocido correctamente"); :}
+                    | PACKAGE error PUNTO_COMA
+                      {: System.out.println("[Recuperación]: Error sintáctico en paquete recuperado hasta ';'"); :}
+                    ;
+
+lista_importaciones ::= lista_importaciones declaracion_importacion
+                      | declaracion_importacion
+                      ;
+
+declaracion_importacion ::= IMPORT nombre_cualificado PUNTO_COMA
+                          {: System.out.println("Importación reconocida correctamente"); :}
+                        | IMPORT nombre_cualificado PUNTO ASTERISCO PUNTO_COMA
+                          {: System.out.println("Importación reconocida correctamente"); :}
+                        | IMPORT error PUNTO_COMA
+                          {: System.out.println("[Recuperación]: Error sintáctico en importación recuperado hasta ';'"); :}
+                        ;
+
+declaracion_clase ::= PUBLIC CLASS IDENTIFICADOR LLAVE_IZQ LLAVE_DER
+                    {: System.out.println("Clase principal reconocida correctamente"); :}
+                  | CLASS IDENTIFICADOR LLAVE_IZQ LLAVE_DER
+                    {: System.out.println("Clase principal reconocida correctamente"); :}
+                  | PUBLIC CLASS error LLAVE_IZQ LLAVE_DER
+                    {: System.out.println("[Recuperación]: Falta nombre de la clase, recuperado antes de '{'"); :}
+                  | PUBLIC CLASS IDENTIFICADOR LLAVE_IZQ error LLAVE_DER
+                    {: System.out.println("[Recuperación]: Estructura interna de clase inválida, recuperada en '}'"); :}
+                  ;
+
+nombre_cualificado ::= IDENTIFICADOR
+                     | nombre_cualificado PUNTO IDENTIFICADOR
+                     ;

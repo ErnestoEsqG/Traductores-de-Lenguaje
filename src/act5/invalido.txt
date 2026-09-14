@@ -1,0 +1,5 @@
+class Persona {
+    int edad nombre;
+    final int MAX;
+    float = 100;
+}
