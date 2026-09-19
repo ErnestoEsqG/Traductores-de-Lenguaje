@@ -1,0 +1,112 @@
+package act6;
+import java_cup.runtime.*;
+
+parser code {:
+    private boolean huboError = false;
+
+    public void syntax_error(Symbol s) {
+        huboError = true;
+        int linea = s.left;
+        int columna = s.right;
+        System.err.println("-> [ERROR SINTÁCTICO] Línea: " + linea + ", Columna: " + columna + " | Causa/Token no esperado: '" + s.value + "'");
+    }
+
+    public void unrecovered_syntax_error(Symbol s) throws java.lang.Exception {
+        System.err.println("-> [ERROR FATAL] Imposible continuar en Línea: " + s.left + ", Columna: " + s.right);
+    }
+
+    public boolean huboErrorFatal() {
+        return huboError;
+    }
+:};
+
+/* TERMINALES */
+terminal FUNCTION;
+terminal LEER, ESCRIBIR;
+terminal IGUAL, MAS, MENOS, POR, ENTRE, MOD;
+terminal AND, OR, NOT;
+terminal PAR_IZQ, PAR_DER, LLAVE_IZQ, LLAVE_DER, PUNTO_COMA, COMA;
+terminal IDENTIFICADOR, VALOR, CADENA;
+
+/* NO TERMINALES */
+non terminal inicio, metodo, cuerpo_metodo, sentencia;
+non terminal lectura, lista_identificadores;
+non terminal escritura, lista_elementos, elemento;
+non terminal asignacion;
+non terminal expresion;
+
+/* PRECEDENCIA Y ASOCIATIVIDAD */
+precedence left OR;
+precedence left AND;
+precedence left MAS, MENOS;
+precedence left POR, ENTRE, MOD;
+precedence right NOT;
+
+start with inicio;
+
+inicio ::= metodo 
+{: 
+    System.out.println("Regla reconocida: inicio"); 
+:};
+
+metodo ::= FUNCTION IDENTIFICADOR PAR_IZQ PAR_DER LLAVE_IZQ cuerpo_metodo LLAVE_DER
+{: 
+    System.out.println("Regla reconocida: metodo"); 
+:};
+
+cuerpo_metodo ::= cuerpo_metodo sentencia
+                | /* vacio */
+                ;
+
+sentencia ::= lectura
+            | escritura
+            | asignacion
+            | error PUNTO_COMA 
+            {: 
+                System.out.println("-> Recuperación sintáctica exitosa: sentencia descartada hasta ';'."); 
+            :}
+            ;
+
+/* 1. LECTURA */
+lectura ::= LEER PAR_IZQ lista_identificadores PAR_DER PUNTO_COMA
+{: 
+    System.out.println("Regla reconocida: lectura"); 
+:};
+
+lista_identificadores ::= IDENTIFICADOR
+                        | lista_identificadores COMA IDENTIFICADOR
+                        ;
+
+/* 2. ESCRITURA */
+escritura ::= ESCRIBIR PAR_IZQ lista_elementos PAR_DER PUNTO_COMA
+{: 
+    System.out.println("Regla reconocida: escritura"); 
+:};
+
+lista_elementos ::= elemento
+                  | lista_elementos COMA elemento
+                  ;
+
+elemento ::= CADENA
+           | expresion
+           ;
+
+/* 3. ASIGNACIÓN */
+asignacion ::= IDENTIFICADOR IGUAL expresion PUNTO_COMA
+{: 
+    System.out.println("Regla reconocida: asignacion"); 
+:};
+
+/* EXPRESIONES UNIFICADAS */
+expresion ::= expresion MAS expresion
+            | expresion MENOS expresion
+            | expresion POR expresion
+            | expresion ENTRE expresion
+            | expresion MOD expresion
+            | expresion AND expresion
+            | expresion OR expresion
+            | NOT expresion
+            | PAR_IZQ expresion PAR_DER
+            | IDENTIFICADOR
+            | VALOR
+            ;

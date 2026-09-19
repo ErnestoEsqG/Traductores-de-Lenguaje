@@ -1,0 +1,10 @@
+function proceso() {
+    leer(a);
+    leer(a b);
+
+    total = a + b;
+    promedio = (a + b + ;
+
+    activo = a && b;
+    escribir("Fin del proceso");
+}
