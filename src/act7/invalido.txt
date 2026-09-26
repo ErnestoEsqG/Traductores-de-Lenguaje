@@ -1,0 +1,17 @@
+void proceso() {
+    si edad >= 18 {
+        escribir("Mayor");
+    }
+
+    mientras (contador < 10 {
+        contador = contador + 1;
+    }
+
+    para (i = 0; i < 10) {
+        escribir(i);
+    }
+
+    si (a > ) {
+        escribir("Error de condicion");
+    }
+}

@@ -1,0 +1,13 @@
+void proceso() {
+    leer(a);
+
+    si (a > ) {
+        escribir("Error recuperable");
+    }
+
+    escribir("Esta instruccion se analiza correctamente gracias a la recuperacion");
+
+    para (i = 0; i < 3; i = i + 1) {
+        escribir(i);
+    }
+}

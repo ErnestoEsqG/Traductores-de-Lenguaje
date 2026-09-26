@@ -1,0 +1,180 @@
+package act7;
+
+import java_cup.runtime.*;
+
+parser code {:
+    public void syntax_error(Symbol cur_token) {
+        String lexema = (cur_token.value != null) ? cur_token.value.toString() : "desconocido";
+        System.err.println("Error sintáctico en línea " + cur_token.left + ", columna " + cur_token.right 
+            + ": Token inesperado '" + lexema + "'");
+    }
+
+    public void unrecovered_syntax_error(Symbol cur_token) throws java.lang.Exception {
+        System.err.println("Error sintáctico no recuperable en línea " + cur_token.left + ", columna " + cur_token.right + ".");
+    }
+:};
+
+/* Terminales */
+terminal VOID, SI, SINO, SEGUN, CASO, DEFECTO, ROMPER, MIENTRAS, HACER, PARA;
+terminal LEER, ESCRIBIR, AND, OR, NOT, IGUAL_IGUAL, DIFERENTE, MENOR_IGUAL, MAYOR_IGUAL;
+terminal MENOR, MAYOR, ASIGNACION, MAS, MENOS, POR, DIV, MOD;
+terminal PAR_ABRE, PAR_CIERRA, LLAVE_ABRE, LLAVE_CIERRA, DOS_PUNTOS, PUNTO_COMA, COMA;
+terminal String ID, CADENA;
+terminal Integer NUMERO;
+terminal Boolean BOOLEANO;
+
+/* No Terminales */
+non terminal inicio, metodo, bloque, lista_sentencias, sentencia;
+non terminal seleccion_simple, seleccion_doble, seleccion_multiple;
+non terminal ciclo_mientras, ciclo_hacer_mientras, ciclo_para;
+non terminal lista_casos, caso_elemento, caso_defecto, cuerpo_caso;
+non terminal condicion, expresion_logica, expresion_relacional, expresion_aritmetica, termino, factor;
+non terminal asignacion, lectura, escritura, lista_argumentos;
+non terminal op_relacional;
+
+/* Precedencias */
+precedence nonassoc SI;
+precedence nonassoc SINO;
+precedence left OR;
+precedence left AND;
+precedence right NOT;
+precedence left IGUAL_IGUAL, DIFERENTE;
+precedence left MENOR, MAYOR, MENOR_IGUAL, MAYOR_IGUAL;
+precedence left MAS, MENOS;
+precedence left POR, DIV, MOD;
+
+start with inicio;
+
+inicio ::= metodo
+    {: System.out.println("Regla reconocida: inicio"); :}
+    ;
+
+metodo ::= VOID ID PAR_ABRE PAR_CIERRA bloque
+    {: System.out.println("Regla reconocida: metodo"); :}
+    ;
+
+bloque ::= LLAVE_ABRE lista_sentencias LLAVE_CIERRA
+    {: System.out.println("Regla reconocida: bloque"); :}
+    ;
+
+lista_sentencias ::= lista_sentencias sentencia
+    | /* vacio */
+    ;
+
+sentencia ::= seleccion_simple
+    | seleccion_doble
+    | seleccion_multiple
+    | ciclo_mientras
+    | ciclo_hacer_mientras
+    | ciclo_para
+    | asignacion PUNTO_COMA
+    | lectura PUNTO_COMA
+    | escritura PUNTO_COMA
+    | ROMPER PUNTO_COMA
+        {: System.out.println("Regla reconocida: sentencia_romper"); :}
+    | error PUNTO_COMA
+        {: System.out.println("Recuperación de error en sentencia finalizada en ';'"); :}
+    ;
+
+/* Selectivas */
+seleccion_simple ::= SI PAR_ABRE condicion PAR_CIERRA bloque
+    {: System.out.println("Regla reconocida: seleccion_simple"); :}
+    ;
+
+seleccion_doble ::= SI PAR_ABRE condicion PAR_CIERRA bloque SINO bloque
+    {: System.out.println("Regla reconocida: seleccion_doble"); :}
+    ;
+
+seleccion_multiple ::= SEGUN PAR_ABRE ID PAR_CIERRA LLAVE_ABRE lista_casos caso_defecto LLAVE_CIERRA
+    {: System.out.println("Regla reconocida: seleccion_multiple"); :}
+    | SEGUN PAR_ABRE ID PAR_CIERRA LLAVE_ABRE lista_casos LLAVE_CIERRA
+    {: System.out.println("Regla reconocida: seleccion_multiple"); :}
+    ;
+
+lista_casos ::= lista_casos caso_elemento
+    | caso_elemento
+    ;
+
+caso_elemento ::= CASO factor DOS_PUNTOS cuerpo_caso
+    {: System.out.println("Regla reconocida: caso"); :}
+    ;
+
+caso_defecto ::= DEFECTO DOS_PUNTOS cuerpo_caso
+    {: System.out.println("Regla reconocida: defecto"); :}
+    ;
+
+cuerpo_caso ::= lista_sentencias
+    ;
+
+/* Iterativas */
+ciclo_mientras ::= MIENTRAS PAR_ABRE condicion PAR_CIERRA bloque
+    {: System.out.println("Regla reconocida: ciclo_mientras"); :}
+    ;
+
+ciclo_hacer_mientras ::= HACER bloque MIENTRAS PAR_ABRE condicion PAR_CIERRA PUNTO_COMA
+    {: System.out.println("Regla reconocida: ciclo_hacer_mientras"); :}
+    ;
+
+ciclo_para ::= PARA PAR_ABRE asignacion PUNTO_COMA condicion PUNTO_COMA asignacion PAR_CIERRA bloque
+    {: System.out.println("Regla reconocida: ciclo_para"); :}
+    ;
+
+/* Condiciones lógicas y relacionales */
+condicion ::= expresion_logica
+    {: System.out.println("Regla reconocida: condicion"); :}
+    ;
+
+expresion_logica ::= expresion_logica OR expresion_logica
+    {: System.out.println("Regla reconocida: condicion_compuesta (OR)"); :}
+    | expresion_logica AND expresion_logica
+    {: System.out.println("Regla reconocida: condicion_compuesta (AND)"); :}
+    | NOT expresion_logica
+    {: System.out.println("Regla reconocida: condicion_negacion"); :}
+    | PAR_ABRE expresion_logica PAR_CIERRA
+    {: System.out.println("Regla reconocida: condicion_agrupada"); :}
+    | expresion_relacional
+    | BOOLEANO
+    | ID
+    ;
+
+expresion_relacional ::= expresion_aritmetica op_relacional expresion_aritmetica
+    {: System.out.println("Regla reconocida: condicion_simple (relacional)"); :}
+    ;
+
+op_relacional ::= MAYOR | MENOR | MAYOR_IGUAL | MENOR_IGUAL | IGUAL_IGUAL | DIFERENTE
+    ;
+
+/* Expresiones Aritméticas */
+expresion_aritmetica ::= expresion_aritmetica MAS termino
+    | expresion_aritmetica MENOS termino
+    | termino
+    ;
+
+termino ::= termino POR factor
+    | termino DIV factor
+    | termino MOD factor
+    | factor
+    ;
+
+factor ::= ID
+    | NUMERO
+    | CADENA
+    | PAR_ABRE expresion_aritmetica PAR_CIERRA
+    ;
+
+/* Sentencias Base */
+asignacion ::= ID ASIGNACION expresion_aritmetica
+    {: System.out.println("Regla reconocida: asignacion"); :}
+    ;
+
+lectura ::= LEER PAR_ABRE ID PAR_CIERRA
+    {: System.out.println("Regla reconocida: lectura"); :}
+    ;
+
+escritura ::= ESCRIBIR PAR_ABRE lista_argumentos PAR_CIERRA
+    {: System.out.println("Regla reconocida: escritura"); :}
+    ;
+
+lista_argumentos ::= lista_argumentos COMA factor
+    | factor
+    ;
