@@ -1,0 +1,158 @@
+package act8;
+
+import java_cup.runtime.*;
+
+parser code {:
+    public void syntax_error(Symbol cur_token) {
+        System.err.println("Error sintáctico en línea " + cur_token.left + 
+                           ", columna " + cur_token.right + 
+                           ". Token no esperado: '" + cur_token.value + "'");
+    }
+
+    public void unrecovered_syntax_error(Symbol cur_token) throws java.lang.Exception {
+        System.err.println("Error sintáctico no recuperable en línea " + cur_token.left + 
+                           ", columna " + cur_token.right + ".");
+    }
+:};
+
+/* Terminales */
+terminal FUNCTION, RETURN, LET, VAR, CONST;
+terminal IF, ELSE, WHILE, FOR, CONSOLE_LOG;
+terminal PARENTESIS_IZQ, PARENTESIS_DER, LLAVE_IZQ, LLAVE_DER, COMA, PUNTO_COMA, ASIGNAR;
+terminal SUMA, RESTA, MULT, DIV, MOD, IGUAL, IGUAL_ESTRICTO, MAYOR, MENOR;
+terminal String ID, CADENA;
+terminal Integer NUM_INT;
+terminal Double NUM_FLOAT;
+terminal Boolean BOOLEAN_LIT;
+
+/* No Terminales */
+non terminal programa, lista_declaraciones, declaracion;
+non terminal metodo, parametros_optativos, lista_parametros;
+non terminal bloque, lista_sentencias, sentencia;
+non terminal declaracion_variable, declarador;
+non terminal sentencia_retorno, llamada_metodo, llamada_sentencia;
+non terminal argumentos_optativos, lista_argumentos;
+non terminal expresion, expresion_rel, expresion_arit, termino, factor;
+
+/* Precedencias */
+precedence left IGUAL, IGUAL_ESTRICTO, MAYOR, MENOR;
+precedence left SUMA, RESTA;
+precedence left MULT, DIV, MOD;
+
+start with programa;
+
+programa ::= lista_declaraciones
+    {: System.out.println("Fin del análisis sintáctico."); :};
+
+lista_declaraciones ::= lista_declaraciones declaracion
+                      | declaracion;
+
+declaracion ::= metodo
+              | sentencia;
+
+/* --- Definición de Funciones (JavaScript) --- */
+metodo ::= FUNCTION ID:id PARENTESIS_IZQ parametros_optativos PARENTESIS_DER bloque
+    {:
+        System.out.println("Regla reconocida: definicion_metodo [" + id + "]");
+    :}
+    | FUNCTION ID error bloque
+    {: System.err.println("Error sintáctico: faltan paréntesis o firma inválida en función."); :}
+    ;
+
+parametros_optativos ::= lista_parametros
+    {: System.out.println("Regla reconocida: metodo_con_parametros"); :}
+    | /* vacío */
+    {: System.out.println("Regla reconocida: metodo_sin_parametros"); :};
+
+lista_parametros ::= lista_parametros COMA ID
+                   | ID
+                   | lista_parametros COMA error
+                   {: System.err.println("Error sintáctico: se esperaba un identificador de parámetro después de ','."); :}
+                   | error COMA ID
+                   {: System.err.println("Error sintáctico: identificador de parámetro mal estructurado antes de la coma."); :};
+
+bloque ::= LLAVE_IZQ lista_sentencias LLAVE_DER
+         | LLAVE_IZQ LLAVE_DER;
+
+lista_sentencias ::= lista_sentencias sentencia
+                   | sentencia;
+
+declarador ::= LET | VAR | CONST;
+
+declaracion_variable ::= declarador ID ASIGNAR expresion PUNTO_COMA
+                       | declarador ID PUNTO_COMA;
+
+sentencia ::= llamada_sentencia
+            | sentencia_retorno
+            | declaracion_variable
+            | ID ASIGNAR expresion PUNTO_COMA
+            | CONSOLE_LOG PARENTESIS_IZQ expresion PARENTESIS_DER PUNTO_COMA
+            | IF PARENTESIS_IZQ expresion PARENTESIS_DER bloque
+            | IF PARENTESIS_IZQ expresion PARENTESIS_DER bloque ELSE bloque
+            | WHILE PARENTESIS_IZQ expresion PARENTESIS_DER bloque
+            | FOR PARENTESIS_IZQ declaracion_variable expresion PUNTO_COMA ID ASIGNAR expresion PARENTESIS_DER bloque
+            | error PUNTO_COMA
+            {: System.err.println("Punto de recuperación: error sintáctico hasta ';'."); :}
+            | error LLAVE_DER
+            {: System.err.println("Punto de recuperación: error sintáctico hasta '}'."); :};
+
+/* --- Sentencias de Retorno --- */
+sentencia_retorno ::= RETURN expresion PUNTO_COMA
+    {: 
+        System.out.println("Regla reconocida: retorno");
+        System.out.println("Regla reconocida: metodo_con_retorno");
+    :}
+    | RETURN PUNTO_COMA
+    {: 
+        System.out.println("Regla reconocida: retorno (sin expresion)"); 
+        System.out.println("Regla reconocida: metodo_sin_retorno");
+    :}
+    | RETURN error PUNTO_COMA
+    {: System.err.println("Error sintáctico: se esperaba una expresión válida después de 'return'."); :};
+
+/* --- Llamadas a Funciones --- */
+llamada_sentencia ::= llamada_metodo PUNTO_COMA
+    {: System.out.println("Regla reconocida: llamada como sentencia"); :};
+
+llamada_metodo ::= ID:id PARENTESIS_IZQ argumentos_optativos PARENTESIS_DER
+    {: System.out.println("Regla reconocida: llamada_metodo [" + id + "]"); :}
+    | ID PARENTESIS_IZQ error PARENTESIS_DER
+    {: System.err.println("Error sintáctico: argumentos con estructura inválida en llamada."); :};
+
+argumentos_optativos ::= lista_argumentos
+                       | /* sin argumentos */;
+
+lista_argumentos ::= lista_argumentos COMA expresion
+    {: System.out.println("Regla reconocida: lista_argumentos"); :}
+    | expresion
+    {: System.out.println("Regla reconocida: lista_argumentos"); :}
+    | lista_argumentos COMA error
+    {: System.err.println("Error sintáctico: se esperaba una expresión después de ','."); :}
+    | COMA expresion
+    {: System.err.println("Error sintáctico: falta argumento previo a la coma."); :};
+
+/* --- Expresiones --- */
+expresion ::= expresion_rel;
+
+expresion_rel ::= expresion_arit IGUAL expresion_arit
+                | expresion_arit IGUAL_ESTRICTO expresion_arit
+                | expresion_arit MAYOR expresion_arit
+                | expresion_arit MENOR expresion_arit
+                | expresion_arit;
+
+expresion_arit ::= expresion_arit SUMA termino
+                 | expresion_arit RESTA termino
+                 | termino;
+
+termino ::= termino MULT factor
+          | termino DIV factor
+          | termino MOD factor
+          | factor;
+
+factor ::= ID
+         | NUM_INT
+         | NUM_FLOAT
+         | CADENA
+         | BOOLEAN_LIT
+         | llamada_metodo
+         | PARENTESIS_IZQ expresion PARENTESIS_DER;

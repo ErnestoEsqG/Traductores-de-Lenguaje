@@ -1,0 +1,21 @@
+/* Error 1: Función sin paréntesis de apertura */
+function iniciar {
+    console.log("Inicio");
+}
+
+/* Error 2: Coma duplicada en parámetros */
+function duplicar(a,, b) {
+    return a + b;
+}
+
+/* Función válida intermedia para probar la recuperación sintáctica */
+function recuperado() {
+    console.log("Sincronización exitosa");
+}
+
+/* Error 3: Comas consecutivas o argumentos faltantes en llamada */
+function proceso() {
+    sumar(a,, b);
+    mostrar(, total);
+    calcular(10, 20;
+}

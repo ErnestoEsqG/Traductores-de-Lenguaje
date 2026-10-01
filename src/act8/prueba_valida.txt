@@ -1,0 +1,32 @@
+// Método sin parámetros y sin retorno
+function iniciar() {
+    console.log("Inicio del programa");
+}
+
+// Método con parámetros y sin retorno
+function mostrar(valor) {
+    console.log(valor);
+}
+
+// Método con parámetros y con retorno
+function sumar(a, b) {
+    return a + b;
+}
+
+// Método con lógica interna y retorno
+function calcular(numero) {
+    let resultado = 0;
+    if (numero > 10) {
+        resultado = numero * 2;
+    } else {
+        resultado = numero + 1;
+    }
+    return resultado;
+}
+
+// Llamadas como sentencias, anidadas y dentro de expresiones
+function proceso() {
+    iniciar();
+    let total = sumar(10, calcular(5));
+    mostrar(total);
+}
