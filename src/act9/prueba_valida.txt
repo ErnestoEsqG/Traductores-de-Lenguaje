@@ -1,0 +1,16 @@
+class SistemaEscolar {
+    totalAlumnos;
+    sistemaAbierto = true;
+
+    const MAX_CALIFICACION = 100;
+
+    function registrar() {
+        console.log("Registrando...");
+    }
+
+    function calcularPromedio(nota1, nota2) {
+        let sumaNotas = nota1 + nota2;
+        let promedioFinal = sumaNotas / 2;
+        return promedioFinal;
+    }
+}

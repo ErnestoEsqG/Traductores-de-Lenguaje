@@ -1,0 +1,215 @@
+package act9;
+
+import java_cup.runtime.*;
+
+parser code {:
+    public TablaSimbolos tabla = new TablaSimbolos();
+
+    public void syntax_error(Symbol cur_token) {
+        System.err.println("Error sintáctico en línea " + cur_token.left + 
+                           ", columna " + cur_token.right + 
+                           ". Token no esperado: '" + cur_token.value + "'");
+    }
+
+    public void unrecovered_syntax_error(Symbol cur_token) throws java.lang.Exception {
+        System.err.println("Error sintáctico irrecuperable en línea " + cur_token.left + 
+                           ", columna " + cur_token.right + ".");
+    }
+:};
+
+/* Terminales */
+terminal CLASS, FUNCTION, RETURN, LET, VAR, CONST;
+terminal IF, ELSE, WHILE, FOR, CONSOLE_LOG;
+terminal PARENTESIS_IZQ, PARENTESIS_DER, LLAVE_IZQ, LLAVE_DER, COMA, PUNTO_COMA, ASIGNAR;
+terminal SUMA, RESTA, MULT, DIV, MOD, IGUAL, IGUAL_ESTRICTO, MAYOR, MENOR;
+terminal String ID, CADENA, NUM_INT, NUM_FLOAT, BOOLEAN_LIT;
+
+/* No Terminales */
+non terminal programa, lista_declaraciones, declaracion;
+non terminal definicion_clase, cuerpo_clase, lista_miembros_clase, miembro_clase;
+non terminal definicion_metodo, parametros_optativos, lista_parametros;
+non terminal bloque, lista_sentencias, sentencia;
+non terminal declaracion_variable, declaracion_constante, atributo_clase;
+non terminal sentencia_retorno, llamada_metodo, llamada_sentencia;
+non terminal argumentos_optativos, lista_argumentos;
+non terminal String expresion, expresion_rel, expresion_arit, termino, factor;
+
+/* Precedencias */
+precedence left IGUAL, IGUAL_ESTRICTO, MAYOR, MENOR;
+precedence left SUMA, RESTA;
+precedence left MULT, DIV, MOD;
+
+start with programa;
+
+programa ::= lista_declaraciones
+    {:
+        parser.tabla.imprimirTabla();
+    :};
+
+lista_declaraciones ::= lista_declaraciones declaracion
+                      | declaracion;
+
+declaracion ::= definicion_clase
+              | definicion_metodo;
+
+/* --- Definición de Clase --- */
+definicion_clase ::= CLASS ID:id 
+    {:
+        parser.tabla.insertar(id, "CLASE", "void", "N/A", idleft, idright, "ID");
+        parser.tabla.entrarAmbito(id);
+    :}
+    LLAVE_IZQ cuerpo_clase LLAVE_DER
+    {:
+        parser.tabla.salirAmbito();
+    :};
+
+cuerpo_clase ::= lista_miembros_clase
+               | /* vacío */;
+
+lista_miembros_clase ::= lista_miembros_clase miembro_clase
+                       | miembro_clase;
+
+miembro_clase ::= atributo_clase
+                | declaracion_constante
+                | definicion_metodo;
+
+/* --- Atributos de Clase (Inicialización Opcional) --- */
+atributo_clase ::= ID:id PUNTO_COMA
+    {:
+        parser.tabla.insertar(id, "ATRIBUTO", "any", "null", idleft, idright, "ID");
+    :}
+    | ID:id ASIGNAR expresion:val PUNTO_COMA
+    {:
+        parser.tabla.insertar(id, "ATRIBUTO", "any", val, idleft, idright, "ID");
+    :};
+
+/* --- Declaración de Constantes (Inicialización OBLIGATORIA) --- */
+declaracion_constante ::= CONST ID:id ASIGNAR expresion:val PUNTO_COMA
+    {:
+        parser.tabla.insertar(id, "CONSTANTE", "any", val, idleft, idright, "ID");
+    :}
+    | CONST ID:id PUNTO_COMA
+    {:
+        System.err.println("Error sintáctico/semántico en línea " + idleft + ", columna " + idright + 
+                           ": La constante '" + id + "' requiere una asignación obligatoria de valor inicial.");
+    :};
+
+/* --- Definición de Métodos / Funciones --- */
+definicion_metodo ::= FUNCTION ID:id 
+    {:
+        parser.tabla.insertar(id, "METODO", "void", "N/A", idleft, idright, "ID");
+        parser.tabla.entrarAmbito(id);
+    :}
+    PARENTESIS_IZQ parametros_optativos PARENTESIS_DER bloque
+    {:
+        parser.tabla.salirAmbito();
+    :};
+
+parametros_optativos ::= lista_parametros
+                       | /* vacío */;
+
+lista_parametros ::= lista_parametros COMA ID:id
+    {:
+        parser.tabla.insertar(id, "VARIABLE", "any", "N/A (Parámetro)", idleft, idright, "ID");
+    :}
+    | ID:id
+    {:
+        parser.tabla.insertar(id, "VARIABLE", "any", "N/A (Parámetro)", idleft, idright, "ID");
+    :};
+
+bloque ::= LLAVE_IZQ lista_sentencias LLAVE_DER
+         | LLAVE_IZQ LLAVE_DER;
+
+lista_sentencias ::= lista_sentencias sentencia
+                   | sentencia;
+
+/* --- Variables Locales: Inicialización OBLIGATORIA a nivel de método --- */
+declaracion_variable ::= LET ID:id ASIGNAR expresion:val PUNTO_COMA
+    {:
+        parser.tabla.insertar(id, "VARIABLE", "any", val, idleft, idright, "ID");
+    :}
+    | VAR ID:id ASIGNAR expresion:val PUNTO_COMA
+    {:
+        parser.tabla.insertar(id, "VARIABLE", "any", val, idleft, idright, "ID");
+    :}
+    | LET ID:id PUNTO_COMA
+    {:
+        System.err.println("Error sintáctico/semántico en línea " + idleft + ", columna " + idright + 
+                           ": La variable local '" + id + "' debe ser inicializada en su declaración.");
+    :}
+    | VAR ID:id PUNTO_COMA
+    {:
+        System.err.println("Error sintáctico/semántico en línea " + idleft + ", columna " + idright + 
+                           ": La variable local '" + id + "' debe ser inicializada en su declaración.");
+    :};
+
+sentencia ::= llamada_sentencia
+            | sentencia_retorno
+            | declaracion_variable
+            | declaracion_constante
+            | ID:id ASIGNAR expresion PUNTO_COMA
+            {:
+                if (!parser.tabla.existe(id)) {
+                    System.err.println("Error semántico en línea " + idleft + ", columna " + idright + 
+                                       ": El identificador '" + id + "' NO ha sido declarado en el ámbito actual.");
+                }
+            :}
+            | CONSOLE_LOG PARENTESIS_IZQ expresion PARENTESIS_DER PUNTO_COMA
+            | IF PARENTESIS_IZQ expresion PARENTESIS_DER bloque
+            | IF PARENTESIS_IZQ expresion PARENTESIS_DER bloque ELSE bloque
+            | WHILE PARENTESIS_IZQ expresion PARENTESIS_DER bloque
+            | FOR PARENTESIS_IZQ declaracion_variable expresion PUNTO_COMA ID ASIGNAR expresion PARENTESIS_DER bloque
+            | error PUNTO_COMA
+            | error LLAVE_DER;
+
+sentencia_retorno ::= RETURN expresion PUNTO_COMA
+                    | RETURN PUNTO_COMA;
+
+llamada_sentencia ::= llamada_metodo PUNTO_COMA;
+
+llamada_metodo ::= ID:id PARENTESIS_IZQ argumentos_optativos PARENTESIS_DER
+    {:
+        if (!parser.tabla.existe(id)) {
+            System.err.println("Error semántico en línea " + idleft + ", columna " + idright + 
+                               ": El identificador de método '" + id + "' NO ha sido declarado.");
+        }
+    :};
+
+argumentos_optativos ::= lista_argumentos
+                       | /* vacío */;
+
+lista_argumentos ::= lista_argumentos COMA expresion
+                   | expresion;
+
+/* --- Expresiones y obtención de valor representativo --- */
+expresion ::= expresion_rel:e {: RESULT = e; :};
+
+expresion_rel ::= expresion_arit:e1 IGUAL expresion_arit:e2 {: RESULT = e1 + " == " + e2; :}
+                | expresion_arit:e1 IGUAL_ESTRICTO expresion_arit:e2 {: RESULT = e1 + " === " + e2; :}
+                | expresion_arit:e1 MAYOR expresion_arit:e2 {: RESULT = e1 + " > " + e2; :}
+                | expresion_arit:e1 MENOR expresion_arit:e2 {: RESULT = e1 + " < " + e2; :}
+                | expresion_arit:e {: RESULT = e; :};
+
+expresion_arit ::= expresion_arit:e1 SUMA termino:e2 {: RESULT = e1 + " + " + e2; :}
+                 | expresion_arit:e1 RESTA termino:e2 {: RESULT = e1 + " - " + e2; :}
+                 | termino:e {: RESULT = e; :};
+
+termino ::= termino:e1 MULT factor:e2 {: RESULT = e1 + " * " + e2; :}
+          | termino:e1 DIV factor:e2 {: RESULT = e1 + " / " + e2; :}
+          | termino:e1 MOD factor:e2 {: RESULT = e1 + " % " + e2; :}
+          | factor:e {: RESULT = e; :};
+
+factor ::= ID:id
+         {: 
+            if (!parser.tabla.existe(id)) {
+                System.err.println("Error semántico en línea " + idleft + ", columna " + idright + 
+                                   ": El identificador '" + id + "' NO ha sido declarado.");
+            }
+            RESULT = id; 
+         :}
+         | NUM_INT:n {: RESULT = n; :}
+         | NUM_FLOAT:f {: RESULT = f; :}
+         | CADENA:c {: RESULT = c; :}
+         | BOOLEAN_LIT:b {: RESULT = b; :}
+         | llamada_metodo {: RESULT = "llamada()"; :}
+         | PARENTESIS_IZQ expresion:e PARENTESIS_DER {: RESULT = "(" + e + ")"; :};

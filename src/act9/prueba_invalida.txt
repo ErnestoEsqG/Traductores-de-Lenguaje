@@ -1,0 +1,9 @@
+class mi_sistema {
+    AtributoIncorrecto;
+    const VALOR_CONSTANTE;
+
+    function proceso() {
+        let x;
+        let x = z + 10;
+    }
+}
