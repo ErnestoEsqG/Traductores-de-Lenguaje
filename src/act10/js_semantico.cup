@@ -1,0 +1,145 @@
+package act10;
+
+import java_cup.runtime.*;
+import act10.TablaSimbolos;
+import act10.Simbolo;
+import act10.ManejadorTipos;
+
+parser code {:
+    public TablaSimbolos tabla = new TablaSimbolos();
+
+    public void syntax_error(Symbol s) {
+        System.err.println("Error sintáctico en línea " + s.left + ", columna " + s.right + ": Token '" + s.value + "' no esperado.");
+    }
+:};
+
+/* Terminales */
+terminal String LET, VAR, CONST, FUNCTION, IF, ELSE, CONSOLE_LOG;
+terminal String MAS, MENOS, POR, DIV, MOD;
+terminal String MAYOR, MENOR, MAYORIGUAL, MENORIGUAL, IGUALDAD_ESTRICTA, DIFERENTE_ESTRICTO;
+terminal String AND, OR, NOT;
+terminal String ASIGNACION, PUNTOYCOMA, COMA;
+terminal String PAR_ABRE, PAR_CIERRA, LLAVE_ABRE, LLAVE_CIERRA;
+terminal String LIT_NUMBER, LIT_BOOLEAN, LIT_STRING, IDENTIFICADOR;
+
+/* No Terminales Tipados */
+non terminal programa, lista_sentencias, sentencia;
+non terminal declaracion_variable, declaracion_funcion, asignacion_sentencia, estructura_if, llamada_log;
+non terminal String expresion, exp_logica, exp_relacional, exp_aritmetica, termino, factor;
+
+/* Precedencias */
+precedence left OR;
+precedence left AND;
+precedence left IGUALDAD_ESTRICTA, DIFERENTE_ESTRICTO;
+precedence left MAYOR, MENOR, MAYORIGUAL, MENORIGUAL;
+precedence left MAS, MENOS;
+precedence left POR, DIV, MOD;
+precedence right NOT;
+
+start with programa;
+
+programa ::= lista_sentencias;
+
+lista_sentencias ::= lista_sentencias sentencia
+                   | /* vacio */ ;
+
+sentencia ::= declaracion_variable
+            | asignacion_sentencia
+            | declaracion_funcion
+            | estructura_if
+            | llamada_log ;
+
+declaracion_variable ::= LET IDENTIFICADOR:id ASIGNACION expresion:e PUNTOYCOMA
+    {:
+        parser.tabla.declarar(id, e, false, idleft, idright);
+    :}
+    | LET IDENTIFICADOR:id PUNTOYCOMA
+    {:
+        parser.tabla.declarar(id, "indefinido", false, idleft, idright);
+    :}
+    | VAR IDENTIFICADOR:id ASIGNACION expresion:e PUNTOYCOMA
+    {:
+        parser.tabla.declarar(id, e, false, idleft, idright);
+    :}
+    | VAR IDENTIFICADOR:id PUNTOYCOMA
+    {:
+        parser.tabla.declarar(id, "indefinido", false, idleft, idright);
+    :}
+    | CONST IDENTIFICADOR:id ASIGNACION expresion:e PUNTOYCOMA
+    {:
+        parser.tabla.declarar(id, e, true, idleft, idright);
+    :};
+
+asignacion_sentencia ::= IDENTIFICADOR:id ASIGNACION expresion:e PUNTOYCOMA
+    {:
+        parser.tabla.asignar(id, e, idleft, idright);
+    :};
+
+declaracion_funcion ::= FUNCTION IDENTIFICADOR PAR_ABRE PAR_CIERRA LLAVE_ABRE lista_sentencias LLAVE_CIERRA;
+
+estructura_if ::= IF PAR_ABRE expresion:cond PAR_CIERRA LLAVE_ABRE lista_sentencias LLAVE_CIERRA
+    {:
+        ManejadorTipos.validarCondicion(cond, condleft, condright, "if");
+    :};
+
+llamada_log ::= CONSOLE_LOG PAR_ABRE expresion PAR_CIERRA PUNTOYCOMA;
+
+/* Evaluación de Expresiones y Verificación Semántica */
+
+expresion ::= exp_logica:e {: RESULT = e; :};
+
+exp_logica ::= exp_logica:e1 AND exp_relacional:e2
+    {: RESULT = ManejadorTipos.validarLogica(e1, e2, "&&", e1left, e1right); :}
+    | exp_logica:e1 OR exp_relacional:e2
+    {: RESULT = ManejadorTipos.validarLogica(e1, e2, "||", e1left, e1right); :}
+    | exp_relacional:e
+    {: RESULT = e; :};
+
+exp_relacional ::= exp_aritmetica:e1 MAYOR exp_aritmetica:e2
+    {: RESULT = ManejadorTipos.validarRelacional(e1, e2, ">", e1left, e1right); :}
+    | exp_aritmetica:e1 MENOR exp_aritmetica:e2
+    {: RESULT = ManejadorTipos.validarRelacional(e1, e2, "<", e1left, e1right); :}
+    | exp_aritmetica:e1 MAYORIGUAL exp_aritmetica:e2
+    {: RESULT = ManejadorTipos.validarRelacional(e1, e2, ">=", e1left, e1right); :}
+    | exp_aritmetica:e1 MENORIGUAL exp_aritmetica:e2
+    {: RESULT = ManejadorTipos.validarRelacional(e1, e2, "<=", e1left, e1right); :}
+    | exp_aritmetica:e1 IGUALDAD_ESTRICTA exp_aritmetica:e2
+    {: RESULT = ManejadorTipos.validarIgualdad(e1, e2, "===", e1left, e1right); :}
+    | exp_aritmetica:e1 DIFERENTE_ESTRICTO exp_aritmetica:e2
+    {: RESULT = ManejadorTipos.validarIgualdad(e1, e2, "!==", e1left, e1right); :}
+    | exp_aritmetica:e
+    {: RESULT = e; :};
+
+exp_aritmetica ::= exp_aritmetica:e1 MAS termino:e2
+    {: RESULT = ManejadorTipos.validarSuma(e1, e2, e1left, e1right); :}
+    | exp_aritmetica:e1 MENOS termino:e2
+    {: RESULT = ManejadorTipos.validarAritmetica(e1, e2, "-", e1left, e1right); :}
+    | termino:e
+    {: RESULT = e; :};
+
+termino ::= termino:e1 POR factor:e2
+    {: RESULT = ManejadorTipos.validarAritmetica(e1, e2, "*", e1left, e1right); :}
+    | termino:e1 DIV factor:e2
+    {: RESULT = ManejadorTipos.validarAritmetica(e1, e2, "/", e1left, e1right); :}
+    | termino:e1 MOD factor:e2
+    {: RESULT = ManejadorTipos.validarAritmetica(e1, e2, "%", e1left, e1right); :}
+    | factor:e
+    {: RESULT = e; :};
+
+factor ::= PAR_ABRE expresion:e PAR_CIERRA
+    {: RESULT = e; :}
+    | NOT factor:e
+    {: RESULT = ManejadorTipos.validarNot(e, eleft, eright); :}
+    | IDENTIFICADOR:id
+    {:
+        Simbolo s = parser.tabla.buscar(id);
+        if (s == null) {
+            ManejadorTipos.reportarError(idleft, idright, "El identificador '" + id + "' no ha sido declarado en este ámbito.");
+            RESULT = ManejadorTipos.ERROR;
+        } else {
+            RESULT = s.getTipoActual();
+        }
+    :}
+    | LIT_NUMBER   {: RESULT = "number"; :}
+    | LIT_BOOLEAN  {: RESULT = "boolean"; :}
+    | LIT_STRING   {: RESULT = "string"; :};
