@@ -1,0 +1,352 @@
+package act11;
+
+import java_cup.runtime.*;
+import java.util.ArrayList;
+import java.util.List;
+
+parser code {:
+    public ControladorSemantico sem = new ControladorSemantico();
+
+    public void syntax_error(Symbol s) {
+        System.err.println("Error sintáctico en Línea " + (s.left) + ", Columna " + (s.right) + ". Token: " + s.value);
+    }
+:};
+
+/* Terminales */
+terminal CLASS, FUNCTION, RETURN, IF, ELSE, WHILE, FOR;
+terminal BREAK, CONTINUE, LET;
+terminal LLAVE_IZQ, LLAVE_DER, PAR_IZQ, PAR_DER;
+terminal PUNTO_COMA, COMA, PUNTO, DOS_PUNTOS;
+terminal ASIGNACION, MAS, MENOS, POR, DIV, MAYOR, MENOR, MAYOR_IGUAL, MENOR_IGUAL, IGUAL_IGUAL, DISTINTO;
+terminal String ID;
+terminal TipoDato TIPO;
+terminal Object LITERAL_NUM, LITERAL_STR, LITERAL_BOOL;
+
+/* No Terminales */
+non terminal Object programa, lista_declaraciones, declaracion;
+non terminal Object declaracion_clase, cuerpo_clase, miembro_clase;
+non terminal Object declaracion_metodo, declaracion_funcion;
+non terminal List<Simbolo> lista_parametros, parametros_opt;
+non terminal Simbolo parametro;
+non terminal List<TipoDato> lista_argumentos, argumentos_opt;
+non terminal TipoDato expresion, expresion_relacional, expresion_aritmetica, termino, factor;
+non terminal Object sentencia, lista_sentencias, bloque;
+non terminal Object sentencia_seleccion, encabezado_if, sentencia_iteracion, sentencia_retorno, sentencia_control;
+non terminal Object declaracion_var;
+non terminal Object init_for, paso_for;
+
+/* Precedencias: resuelve el 'dangling-else' sin generar conflictos */
+precedence nonassoc IF;
+precedence nonassoc ELSE;
+precedence left IGUAL_IGUAL, DISTINTO;
+precedence left MENOR, MAYOR, MENOR_IGUAL, MAYOR_IGUAL;
+precedence left MAS, MENOS;
+precedence left POR, DIV;
+precedence right ASIGNACION;
+
+start with programa;
+
+programa ::= lista_declaraciones
+    {:
+        System.out.println("=================================================");
+        System.out.println("           RESUMEN DEL ANÁLISIS SEMÁNTICO         ");
+        System.out.println("=================================================");
+        if (sem.hayErrores()) {
+            System.out.println("Se detectaron " + sem.getErrores().size() + " errores semánticos.");
+        } else {
+            System.out.println("El programa es semánticamente correcto (0 errores).");
+        }
+        System.out.println("=================================================");
+    :};
+
+lista_declaraciones ::= lista_declaraciones declaracion
+                      | declaracion
+                      ;
+
+/* Eliminado declaracion_var directo para quitar el conflicto con sentencia */
+declaracion ::= declaracion_clase
+              | declaracion_funcion
+              | sentencia
+              ;
+
+/* Clases */
+declaracion_clase ::= CLASS ID:nombre
+    {:
+        sem.declararClase(nombre, nombreleft, nombreright);
+    :}
+    LLAVE_IZQ cuerpo_clase LLAVE_DER
+    {:
+        sem.salirAmbito();
+        sem.setClaseActual(null);
+    :};
+
+cuerpo_clase ::= cuerpo_clase miembro_clase
+               | /* vacio */
+               ;
+
+miembro_clase ::= declaracion_var
+                | declaracion_metodo
+                ;
+
+declaracion_metodo ::= ID:nombre PAR_IZQ parametros_opt:params PAR_DER DOS_PUNTOS TIPO:tRet
+    {:
+        Simbolo met = new Simbolo(nombre, tRet, params, Simbolo.Rol.METODO, nombreleft, nombreright);
+        sem.getEntornoActual().insertar(met);
+        sem.setFuncionActual(met);
+        sem.entrarAmbito(nombre, TablaSimbolos.TipoAmbito.FUNCION);
+        if (params != null) {
+            for (Simbolo p : params) {
+                sem.validarDeclaracionVariable(p.getNombre(), p.getTipo(), Simbolo.Rol.PARAMETRO, p.getLinea(), p.getColumna());
+            }
+        }
+    :}
+    bloque
+    {:
+        sem.salirAmbito();
+        sem.setFuncionActual(null);
+    :};
+
+/* Funciones */
+declaracion_funcion ::= FUNCTION ID:nombre PAR_IZQ parametros_opt:params PAR_DER DOS_PUNTOS TIPO:tRet
+    {:
+        Simbolo fn = new Simbolo(nombre, tRet, params, Simbolo.Rol.FUNCION, nombreleft, nombreright);
+        sem.getEntornoActual().insertar(fn);
+        sem.setFuncionActual(fn);
+        sem.entrarAmbito(nombre, TablaSimbolos.TipoAmbito.FUNCION);
+        if (params != null) {
+            for (Simbolo p : params) {
+                sem.validarDeclaracionVariable(p.getNombre(), p.getTipo(), Simbolo.Rol.PARAMETRO, p.getLinea(), p.getColumna());
+            }
+        }
+    :}
+    bloque
+    {:
+        sem.salirAmbito();
+        sem.setFuncionActual(null);
+    :};
+
+parametros_opt ::= lista_parametros:lp {: RESULT = lp; :}
+                 | /* vacio */         {: RESULT = new ArrayList<Simbolo>(); :}
+                 ;
+
+lista_parametros ::= lista_parametros:lp COMA parametro:p
+                     {: lp.add(p); RESULT = lp; :}
+                   | parametro:p
+                     {: List<Simbolo> lp = new ArrayList<>(); lp.add(p); RESULT = lp; :}
+                   ;
+
+parametro ::= ID:id DOS_PUNTOS TIPO:tipo
+              {: RESULT = new Simbolo(id, tipo, Simbolo.Rol.PARAMETRO, idleft, idright); :};
+
+/* Bloques y Sentencias */
+bloque ::= LLAVE_IZQ
+    {: sem.entrarAmbito("bloque", TablaSimbolos.TipoAmbito.BLOQUE); :}
+    lista_sentencias
+    LLAVE_DER
+    {: sem.salirAmbito(); :};
+
+lista_sentencias ::= lista_sentencias sentencia
+                   | /* vacio */
+                   ;
+
+sentencia ::= declaracion_var
+            | sentencia_seleccion
+            | sentencia_iteracion
+            | sentencia_retorno
+            | sentencia_control
+            | expresion PUNTO_COMA
+            | bloque
+            ;
+
+declaracion_var ::= LET ID:id DOS_PUNTOS TIPO:t ASIGNACION expresion:e PUNTO_COMA
+    {:
+        if (e != TipoDato.ERROR && !t.esCompatible(e)) {
+            sem.agregarError(idleft, idright, id, "Tipo incompatible al inicializar '" + id + "'. Esperado: " + t + ", obtenido: " + e);
+        }
+        sem.validarDeclaracionVariable(id, t, Simbolo.Rol.VARIABLE, idleft, idright);
+    :}
+    | LET ID:id DOS_PUNTOS TIPO:t PUNTO_COMA
+    {:
+        sem.validarDeclaracionVariable(id, t, Simbolo.Rol.VARIABLE, idleft, idright);
+    :};
+
+/* Selección: encabezado_if unifica la acción y elimina el conflicto NT$4 vs NT$5 */
+encabezado_if ::= IF PAR_IZQ expresion:cond PAR_DER
+    {:
+        sem.validarCondicion(cond, condleft, condright, "if");
+    :};
+
+sentencia_seleccion ::= encabezado_if sentencia %prec IF
+                      | encabezado_if sentencia ELSE sentencia
+                      ;
+
+/* Iteración */
+sentencia_iteracion ::= WHILE
+    {: sem.entrarCiclo(); :}
+    PAR_IZQ expresion:cond PAR_DER
+    {:
+        sem.validarCondicion(cond, condleft, condright, "while");
+    :}
+    sentencia
+    {: sem.salirCiclo(); :}
+    | FOR PAR_IZQ init_for PUNTO_COMA expresion:cond PUNTO_COMA paso_for PAR_DER
+    {:
+        sem.entrarCiclo();
+        sem.validarCondicion(cond, condleft, condright, "for");
+    :}
+    sentencia
+    {: sem.salirCiclo(); :}
+    ;
+
+init_for ::= LET ID:id DOS_PUNTOS TIPO:t ASIGNACION expresion:e
+    {:
+        sem.validarDeclaracionVariable(id, t, Simbolo.Rol.VARIABLE, idleft, idright);
+    :}
+    | ID:id ASIGNACION expresion:e
+    {:
+        sem.validarUsoVariable(id, idleft, idright);
+    :}
+    | /* vacio */
+    ;
+
+/* paso_for usa directamente expresion, eliminando el conflicto de asignación repetida */
+paso_for ::= expresion
+           | /* vacio */
+           ;
+
+/* Control de Flujo */
+sentencia_control ::= BREAK:b PUNTO_COMA
+    {:
+        sem.validarBreak(bleft, bright);
+    :}
+    | CONTINUE:c PUNTO_COMA
+    {:
+        sem.validarContinue(cleft, cright);
+    :};
+
+sentencia_retorno ::= RETURN:r expresion:e PUNTO_COMA
+    {:
+        sem.validarReturn(e, rleft, rright);
+    :}
+    | RETURN:r PUNTO_COMA
+    {:
+        sem.validarReturn(TipoDato.VOID, rleft, rright);
+    :};
+
+/* Expresiones */
+expresion ::= ID:id ASIGNACION expresion:e
+    {:
+        TipoDato varTipo = sem.validarUsoVariable(id, idleft, idright);
+        if (varTipo != TipoDato.ERROR && e != TipoDato.ERROR && !varTipo.esCompatible(e)) {
+            sem.agregarError(idleft, idright, id, "Asignación incompatible en variable '" + id + "'. Esperado: " + varTipo + ", obtenido: " + e);
+        }
+        RESULT = varTipo;
+    :}
+    | expresion_relacional:e {: RESULT = e; :}
+    ;
+
+/* Incorporación de todos los operadores relacionales para eliminar advertencias */
+expresion_relacional ::= expresion_relacional:e1 MAYOR expresion_aritmetica:e2
+    {:
+        if (e1 != TipoDato.NUMBER || e2 != TipoDato.NUMBER) {
+            sem.agregarError(e1left, e1right, ">", "Operación relacional '>' requiere operandos de tipo number.");
+            RESULT = TipoDato.ERROR;
+        } else {
+            RESULT = TipoDato.BOOLEAN;
+        }
+    :}
+    | expresion_relacional:e1 MENOR expresion_aritmetica:e2
+    {:
+        RESULT = TipoDato.BOOLEAN;
+    :}
+    | expresion_relacional:e1 MAYOR_IGUAL expresion_aritmetica:e2
+    {:
+        RESULT = TipoDato.BOOLEAN;
+    :}
+    | expresion_relacional:e1 MENOR_IGUAL expresion_aritmetica:e2
+    {:
+        RESULT = TipoDato.BOOLEAN;
+    :}
+    | expresion_relacional:e1 IGUAL_IGUAL expresion_aritmetica:e2
+    {:
+        RESULT = TipoDato.BOOLEAN;
+    :}
+    | expresion_relacional:e1 DISTINTO expresion_aritmetica:e2
+    {:
+        RESULT = TipoDato.BOOLEAN;
+    :}
+    | expresion_aritmetica:e {: RESULT = e; :}
+    ;
+
+/* Incorporación de suma y resta */
+expresion_aritmetica ::= expresion_aritmetica:e1 MAS termino:e2
+    {:
+        if (e1 == TipoDato.NUMBER && e2 == TipoDato.NUMBER) RESULT = TipoDato.NUMBER;
+        else if (e1 == TipoDato.STRING || e2 == TipoDato.STRING) RESULT = TipoDato.STRING;
+        else {
+            sem.agregarError(e1left, e1right, "+", "Tipos incompatibles para el operador suma (+).");
+            RESULT = TipoDato.ERROR;
+        }
+    :}
+    | expresion_aritmetica:e1 MENOS termino:e2
+    {:
+        if (e1 != TipoDato.NUMBER || e2 != TipoDato.NUMBER) {
+            sem.agregarError(e1left, e1right, "-", "Operador resta (-) requiere operandos de tipo number.");
+            RESULT = TipoDato.ERROR;
+        } else {
+            RESULT = TipoDato.NUMBER;
+        }
+    :}
+    | termino:t {: RESULT = t; :}
+    ;
+
+/* Incorporación de multiplicación y división */
+termino ::= termino:t1 POR factor:f
+    {:
+        if (t1 != TipoDato.NUMBER || f != TipoDato.NUMBER) {
+            sem.agregarError(t1left, t1right, "*", "Operador multiplicación (*) requiere operandos de tipo number.");
+            RESULT = TipoDato.ERROR;
+        } else {
+            RESULT = TipoDato.NUMBER;
+        }
+    :}
+    | termino:t1 DIV factor:f
+    {:
+        if (t1 != TipoDato.NUMBER || f != TipoDato.NUMBER) {
+            sem.agregarError(t1left, t1right, "/", "Operador división (/) requiere operandos de tipo number.");
+            RESULT = TipoDato.ERROR;
+        } else {
+            RESULT = TipoDato.NUMBER;
+        }
+    :}
+    | factor:f {: RESULT = f; :}
+    ;
+
+/* Incorporación de acceso a propiedades (PUNTO) */
+factor ::= ID:id
+    {:
+        RESULT = sem.validarUsoVariable(id, idleft, idright);
+    :}
+    | ID:obj PUNTO ID:miembro
+    {:
+        RESULT = sem.validarAccesoMiembro(obj, miembro, objleft, objright);
+    :}
+    | ID:id PAR_IZQ argumentos_opt:args PAR_DER
+    {:
+        RESULT = sem.validarLlamadaFuncion(id, args, idleft, idright);
+    :}
+    | LITERAL_NUM  {: RESULT = TipoDato.NUMBER; :}
+    | LITERAL_STR  {: RESULT = TipoDato.STRING; :}
+    | LITERAL_BOOL {: RESULT = TipoDato.BOOLEAN; :}
+    | PAR_IZQ expresion:e PAR_DER {: RESULT = e; :}
+    ;
+
+argumentos_opt ::= lista_argumentos:la {: RESULT = la; :}
+                 | /* vacio */         {: RESULT = new ArrayList<TipoDato>(); :}
+                 ;
+
+lista_argumentos ::= lista_argumentos:la COMA expresion:e
+                     {: la.add(e); RESULT = la; :}
+                   | expresion:e
+                     {: List<TipoDato> la = new ArrayList<>(); la.add(e); RESULT = la; :}
+                   ;
