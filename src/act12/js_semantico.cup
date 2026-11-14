@@ -1,0 +1,126 @@
+/*
+ * Camarena Velazquez Alberto Dario
+ * Esqueda Guzman Ernesto
+ * Nava Gutierrez Alan Santiago
+ */
+package act12;
+
+import java_cup.runtime.*;
+
+parser code {:
+    /** Controlador semántico y de código intermedio; lo asigna CompiladorMain. */
+    public ControladorSemantico sem;
+
+    /** Clase (let / const / var) de la declaración que se está analizando. */
+    public Simbolo.Clase claseActual;
+
+    public void syntax_error(Symbol s) {
+        sem.errorSintactico(s.left, s.right, String.valueOf(s.value),
+                "Token inesperado; se descarta la sentencia hasta el siguiente ';'.");
+    }
+
+    public void unrecovered_syntax_error(Symbol s) throws Exception {
+        throw new Exception("Error sintáctico irrecuperable en línea " + s.left + ", columna " + s.right
+                + " [" + s.value + "]: no fue posible continuar el análisis.");
+    }
+:};
+
+/* ---------- Terminales ---------- */
+terminal LET, CONST, VAR;
+terminal LLAVE_IZQ, LLAVE_DER, PAR_IZQ, PAR_DER, PUNTO_COMA, COMA;
+terminal ASIGNACION;
+terminal MAS, MENOS, POR, DIV, MOD;
+terminal MAYOR, MENOR, MAYOR_IGUAL, MENOR_IGUAL;
+terminal IGUAL_IGUAL, DISTINTO, IGUAL_ESTRICTO, DISTINTO_ESTRICTO;
+terminal AND, OR, NOT;
+terminal UMENOS;
+terminal String ID, LITERAL_NUM, LITERAL_STR, LITERAL_BOOL;
+
+/* ---------- No terminales ---------- */
+non terminal programa, lista_sentencias, sentencia, bloque;
+non terminal declaracion, lista_declaradores, declarador, asignacion;
+non terminal Simbolo.Clase clase_declaracion;
+non terminal NodoExpresion expresion;
+
+/* ---------- Precedencias (de menor a mayor) ---------- */
+precedence left OR;
+precedence left AND;
+precedence left IGUAL_IGUAL, DISTINTO, IGUAL_ESTRICTO, DISTINTO_ESTRICTO;
+precedence left MENOR, MAYOR, MENOR_IGUAL, MAYOR_IGUAL;
+precedence left MAS, MENOS;
+precedence left POR, DIV, MOD;
+precedence right NOT, UMENOS;
+
+start with programa;
+
+programa ::= lista_sentencias ;
+
+lista_sentencias ::= lista_sentencias sentencia
+                   | /* vacío */
+                   ;
+
+sentencia ::= declaracion:d PUNTO_COMA
+                {: sem.finSentencia(dleft); :}
+            | asignacion:a PUNTO_COMA
+                {: sem.finSentencia(aleft); :}
+            | bloque
+            | error:e PUNTO_COMA
+                {: sem.finSentencia(eleft); :}
+            ;
+
+/* Bloques anidados: cada { } abre un ámbito nuevo */
+bloque ::= LLAVE_IZQ
+                {: sem.entrarBloque(); :}
+           lista_sentencias LLAVE_DER
+                {: sem.salirBloque(); :}
+         ;
+
+/* Declaraciones: let a = 1, b;   const PI = 3.14;   var x; */
+declaracion ::= clase_declaracion:c lista_declaradores
+                {: RESULT = c; :}
+              ;
+
+clase_declaracion ::= LET   {: parser.claseActual = Simbolo.Clase.LET;   RESULT = parser.claseActual; :}
+                    | CONST {: parser.claseActual = Simbolo.Clase.CONST; RESULT = parser.claseActual; :}
+                    | VAR   {: parser.claseActual = Simbolo.Clase.VAR;   RESULT = parser.claseActual; :}
+                    ;
+
+lista_declaradores ::= lista_declaradores COMA declarador
+                     | declarador
+                     ;
+
+declarador ::= ID:id ASIGNACION expresion:e
+                {: sem.declarar(parser.claseActual, id, e, idleft, idright); :}
+             | ID:id
+                {: sem.declarar(parser.claseActual, id, null, idleft, idright); :}
+             ;
+
+/* Asignación: x = expresion; */
+asignacion ::= ID:id ASIGNACION expresion:e
+                {: sem.asignar(id, e, idleft, idright); RESULT = id; :}
+             ;
+
+/* Expresiones aritméticas, relacionales y lógicas */
+expresion ::= expresion:a OR:o expresion:b                {: RESULT = sem.binaria("||",  a, b, oleft, oright); :}
+            | expresion:a AND:o expresion:b               {: RESULT = sem.binaria("&&",  a, b, oleft, oright); :}
+            | expresion:a IGUAL_IGUAL:o expresion:b       {: RESULT = sem.binaria("==",  a, b, oleft, oright); :}
+            | expresion:a DISTINTO:o expresion:b          {: RESULT = sem.binaria("!=",  a, b, oleft, oright); :}
+            | expresion:a IGUAL_ESTRICTO:o expresion:b    {: RESULT = sem.binaria("===", a, b, oleft, oright); :}
+            | expresion:a DISTINTO_ESTRICTO:o expresion:b {: RESULT = sem.binaria("!==", a, b, oleft, oright); :}
+            | expresion:a MENOR:o expresion:b             {: RESULT = sem.binaria("<",   a, b, oleft, oright); :}
+            | expresion:a MAYOR:o expresion:b             {: RESULT = sem.binaria(">",   a, b, oleft, oright); :}
+            | expresion:a MENOR_IGUAL:o expresion:b       {: RESULT = sem.binaria("<=",  a, b, oleft, oright); :}
+            | expresion:a MAYOR_IGUAL:o expresion:b       {: RESULT = sem.binaria(">=",  a, b, oleft, oright); :}
+            | expresion:a MAS:o expresion:b               {: RESULT = sem.binaria("+",   a, b, oleft, oright); :}
+            | expresion:a MENOS:o expresion:b             {: RESULT = sem.binaria("-",   a, b, oleft, oright); :}
+            | expresion:a POR:o expresion:b               {: RESULT = sem.binaria("*",   a, b, oleft, oright); :}
+            | expresion:a DIV:o expresion:b               {: RESULT = sem.binaria("/",   a, b, oleft, oright); :}
+            | expresion:a MOD:o expresion:b               {: RESULT = sem.binaria("%",   a, b, oleft, oright); :}
+            | MENOS:o expresion:a                         {: RESULT = sem.unaria("-", a, oleft, oright); :} %prec UMENOS
+            | NOT:o expresion:a                           {: RESULT = sem.unaria("!", a, oleft, oright); :}
+            | PAR_IZQ expresion:e PAR_DER                 {: RESULT = e; :}
+            | ID:id                                       {: RESULT = sem.usoVariable(id, idleft, idright); :}
+            | LITERAL_NUM:n                               {: RESULT = sem.literal(TipoDato.NUMBER, n); :}
+            | LITERAL_STR:s                               {: RESULT = sem.literal(TipoDato.STRING, s); :}
+            | LITERAL_BOOL:b                              {: RESULT = sem.literal(TipoDato.BOOLEAN, b); :}
+            ;
