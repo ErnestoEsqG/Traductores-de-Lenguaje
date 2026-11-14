@@ -1,0 +1,276 @@
+/*
+ * Camarena Velazquez Alberto Dario
+ * Esqueda Guzman Ernesto
+ * Nava Gutierrez Alan Santiago
+ */
+package act13;
+
+import java_cup.runtime.*;
+import java.util.ArrayList;
+import java.util.List;
+
+parser code {:
+    /** Controlador semántico y de código intermedio; lo asigna CompiladorMain. */
+    public ControladorSemantico sem;
+
+    /** Categoría (let / const / var) de la declaración que se está analizando. */
+    public Simbolo.Clase claseActual;
+
+    public void syntax_error(Symbol s) {
+        sem.errorSintactico(s.left, s.right, String.valueOf(s.value),
+                "Token inesperado; se descarta la parte de la sentencia que no pudo analizarse.");
+    }
+
+    public void unrecovered_syntax_error(Symbol s) throws Exception {
+        throw new Exception("Error sintáctico irrecuperable en línea " + s.left + ", columna " + s.right
+                + " [" + s.value + "]: no fue posible continuar el análisis.");
+    }
+:};
+
+/* ---------- Terminales ---------- */
+terminal LET, CONST, VAR;
+terminal IF, ELSE, SWITCH, CASE, DEFAULT, WHILE, FOR, DO, BREAK, CONTINUE;
+terminal FUNCTION, RETURN, CLASS, NEW, THIS;
+terminal LLAVE_IZQ, LLAVE_DER, PAR_IZQ, PAR_DER, PUNTO_COMA, COMA, DOS_PUNTOS, PUNTO;
+terminal ASIGNACION, INCREMENTO, DECREMENTO;
+terminal MAS, MENOS, POR, DIV, MOD;
+terminal MAYOR, MENOR, MAYOR_IGUAL, MENOR_IGUAL;
+terminal IGUAL_IGUAL, DISTINTO, IGUAL_ESTRICTO, DISTINTO_ESTRICTO;
+terminal AND, OR, NOT;
+terminal UMENOS, SIN_ELSE;
+terminal String ID, LITERAL_NUM, LITERAL_STR, LITERAL_BOOL, ASIGNACION_COMPUESTA;
+
+/* ---------- No terminales ---------- */
+non terminal programa, lista_sentencias, sentencia, bloque, cuerpo;
+non terminal declaracion, lista_declaradores, declarador, sentencia_simple;
+non terminal sentencia_if, sentencia_while, sentencia_do, sentencia_for, sentencia_switch;
+non terminal for_inicio, for_actualizacion, lista_casos, caso;
+non terminal declaracion_funcion, declaracion_clase, lista_miembros, miembro;
+non terminal Simbolo.Clase clase_declaracion;
+non terminal ControladorSemantico.InfoIf encabezado_if;
+non terminal Integer marca;
+non terminal String[] acceso;
+non terminal List<String> parametros, lista_parametros;
+non terminal List<NodoExpresion> argumentos, lista_argumentos;
+non terminal NodoExpresion expresion, llamada, constante, for_condicion;
+
+/* ---------- Precedencias (de menor a mayor) ---------- */
+precedence nonassoc SIN_ELSE;
+precedence nonassoc ELSE;
+precedence left OR;
+precedence left AND;
+precedence left IGUAL_IGUAL, DISTINTO, IGUAL_ESTRICTO, DISTINTO_ESTRICTO;
+precedence left MENOR, MAYOR, MENOR_IGUAL, MAYOR_IGUAL;
+precedence left MAS, MENOS;
+precedence left POR, DIV, MOD;
+precedence right NOT, UMENOS;
+
+start with programa;
+
+programa ::= lista_sentencias ;
+
+lista_sentencias ::= lista_sentencias sentencia
+                   | /* vacío */
+                   ;
+
+sentencia ::= declaracion PUNTO_COMA
+            | sentencia_simple PUNTO_COMA
+            | bloque
+            | sentencia_if
+            | sentencia_switch
+            | sentencia_while
+            | sentencia_do
+            | sentencia_for
+            | declaracion_funcion
+            | declaracion_clase
+            | BREAK:b PUNTO_COMA                 {: sem.sentenciaBreak(bleft, bright); :}
+            | CONTINUE:c PUNTO_COMA              {: sem.sentenciaContinue(cleft, cright); :}
+            | RETURN:r PUNTO_COMA                {: sem.sentenciaReturn(null, rleft, rright); :}
+            | RETURN:r expresion:e PUNTO_COMA    {: sem.sentenciaReturn(e, rleft, rright); :}
+            | error PUNTO_COMA
+            ;
+
+/* Bloque: cada { } abre un ámbito nuevo */
+bloque ::= LLAVE_IZQ {: sem.entrarBloque(); :} lista_sentencias LLAVE_DER {: sem.salirBloque(); :} ;
+
+/* ================= Declaraciones y sentencias simples ================= */
+
+declaracion ::= clase_declaracion lista_declaradores ;
+
+clase_declaracion ::= LET   {: parser.claseActual = Simbolo.Clase.LET;   :}
+                    | CONST {: parser.claseActual = Simbolo.Clase.CONST; :}
+                    | VAR   {: parser.claseActual = Simbolo.Clase.VAR;   :}
+                    ;
+
+lista_declaradores ::= lista_declaradores COMA declarador
+                     | declarador
+                     ;
+
+declarador ::= ID:id ASIGNACION expresion:e  {: sem.declarar(parser.claseActual, id, e, idleft, idright); :}
+             | ID:id                         {: sem.declarar(parser.claseActual, id, null, idleft, idright); :}
+             ;
+
+/* Asignaciones, incrementos y llamadas usadas como sentencia */
+sentencia_simple ::= ID:id ASIGNACION expresion:e               {: sem.asignar(id, e, idleft, idright); :}
+                   | ID:id ASIGNACION_COMPUESTA:op expresion:e  {: sem.asignarCompuesta(id, op, e, idleft, idright); :}
+                   | ID:id INCREMENTO                           {: sem.incremento(id, "+", idleft, idright); :}
+                   | ID:id DECREMENTO                           {: sem.incremento(id, "-", idleft, idright); :}
+                   | acceso:a ASIGNACION expresion:e            {: sem.asignarMiembro(a[0], a[1], e, aleft, aright); :}
+                   | llamada:l                                  {: sem.descartar(l); :}
+                   ;
+
+/* Acceso a un atributo: objeto.atributo o this.atributo */
+acceso ::= ID:o PUNTO ID:m      {: RESULT = new String[] {o, m}; :}
+         | THIS PUNTO ID:m      {: RESULT = new String[] {"this", m}; :}
+         ;
+
+/* ================= if / else ================= */
+
+encabezado_if ::= IF:i PAR_IZQ expresion:c PAR_DER  {: RESULT = sem.inicioIf(c, ileft, iright); :}
+                | IF:i PAR_IZQ error PAR_DER        {: RESULT = sem.inicioIf(sem.condicionErronea(), ileft, iright); :}
+                ;
+
+/* 'marca' guarda la posición donde termina el bloque if y empieza el else */
+marca ::= /* vacío */  {: RESULT = sem.posicion(); :} ;
+
+sentencia_if ::= encabezado_if:h sentencia marca:m                  {: sem.finIf(h, m, false); :} %prec SIN_ELSE
+               | encabezado_if:h sentencia marca:m ELSE sentencia   {: sem.finIf(h, m, true); :}
+               ;
+
+/* ================= switch ================= */
+
+sentencia_switch ::= SWITCH:s PAR_IZQ expresion:e PAR_DER LLAVE_IZQ
+                        {: sem.inicioSwitch(e, sleft, sright); :}
+                     lista_casos LLAVE_DER
+                        {: sem.finSwitch(); :}
+                   ;
+
+lista_casos ::= lista_casos caso
+              | /* vacío */
+              ;
+
+caso ::= CASE:k constante:v DOS_PUNTOS {: sem.caso(v, kleft, kright); :} lista_sentencias
+       | DEFAULT:d DOS_PUNTOS {: sem.casoDefault(dleft, dright); :} lista_sentencias
+       ;
+
+/* Literal usado en 'case' y como valor inicial de un atributo */
+constante ::= LITERAL_NUM:n          {: RESULT = sem.literal(TipoDato.NUMBER, n); :}
+            | MENOS LITERAL_NUM:n    {: RESULT = sem.literal(TipoDato.NUMBER, "-" + n); :}
+            | LITERAL_STR:s          {: RESULT = sem.literal(TipoDato.STRING, s); :}
+            | LITERAL_BOOL:b         {: RESULT = sem.literal(TipoDato.BOOLEAN, b); :}
+            ;
+
+/* ================= Bucles ================= */
+
+sentencia_while ::= WHILE:w {: sem.inicioWhile(wleft); :}
+                    PAR_IZQ expresion:c PAR_DER {: sem.condicionWhile(c, wleft, wright); :}
+                    sentencia {: sem.finWhile(); :}
+                  ;
+
+sentencia_do ::= DO:d {: sem.inicioDo(dleft); :}
+                 sentencia WHILE:w {: sem.condicionDo(); :}
+                 PAR_IZQ expresion:c PAR_DER PUNTO_COMA {: sem.finDo(c, wleft, wright); :}
+               ;
+
+sentencia_for ::= FOR:f PAR_IZQ {: sem.inicioFor(fleft); :}
+                  for_inicio PUNTO_COMA {: sem.etiquetaFor(); :}
+                  for_condicion:c PUNTO_COMA {: sem.condicionFor(c, fleft, fright); :}
+                  for_actualizacion PAR_DER {: sem.actualizacionFor(); :}
+                  sentencia {: sem.finFor(); :}
+                ;
+
+for_inicio ::= declaracion
+             | sentencia_simple
+             | /* vacío */
+             ;
+
+for_condicion ::= expresion:e   {: RESULT = e; :}
+                | /* vacío */   {: RESULT = null; :}
+                ;
+
+for_actualizacion ::= sentencia_simple
+                    | /* vacío */
+                    ;
+
+/* ================= Funciones ================= */
+
+declaracion_funcion ::= FUNCTION ID:id PAR_IZQ parametros:ps PAR_DER
+                            {: sem.inicioFuncion(id, ps, idleft, idright); :}
+                        cuerpo
+                            {: sem.finRutina(); :}
+                      ;
+
+/* El cuerpo comparte el ámbito de los parámetros */
+cuerpo ::= LLAVE_IZQ lista_sentencias LLAVE_DER ;
+
+parametros ::= lista_parametros:lp  {: RESULT = lp; :}
+             | /* vacío */          {: RESULT = new ArrayList<String>(); :}
+             ;
+
+lista_parametros ::= lista_parametros:lp COMA ID:id  {: lp.add(id); RESULT = lp; :}
+                   | ID:id                           {: List<String> lp = new ArrayList<String>(); lp.add(id); RESULT = lp; :}
+                   ;
+
+/* Llamadas: funcion(args), objeto.metodo(args), this.metodo(args) */
+llamada ::= ID:id PAR_IZQ argumentos:args PAR_DER
+                {: RESULT = sem.llamadaFuncion(id, args, idleft, idright); :}
+          | ID:o PUNTO ID:m PAR_IZQ argumentos:args PAR_DER
+                {: RESULT = sem.llamadaMetodo(o, m, args, oleft, oright); :}
+          | THIS:t PUNTO ID:m PAR_IZQ argumentos:args PAR_DER
+                {: RESULT = sem.llamadaMetodo("this", m, args, tleft, tright); :}
+          ;
+
+argumentos ::= lista_argumentos:la  {: RESULT = la; :}
+             | /* vacío */          {: RESULT = new ArrayList<NodoExpresion>(); :}
+             ;
+
+lista_argumentos ::= lista_argumentos:la COMA expresion:e
+                        {: la.add(sem.argumento(e, eleft)); RESULT = la; :}
+                   | expresion:e
+                        {: List<NodoExpresion> la = new ArrayList<NodoExpresion>(); la.add(sem.argumento(e, eleft)); RESULT = la; :}
+                   ;
+
+/* ================= Clases ================= */
+
+declaracion_clase ::= CLASS ID:id {: sem.inicioClase(id, idleft, idright); :}
+                      LLAVE_IZQ lista_miembros LLAVE_DER {: sem.finClase(); :}
+                    ;
+
+lista_miembros ::= lista_miembros miembro
+                 | /* vacío */
+                 ;
+
+miembro ::= ID:id PUNTO_COMA                           {: sem.atributo(id, null, idleft, idright); :}
+          | ID:id ASIGNACION constante:v PUNTO_COMA    {: sem.atributo(id, v, idleft, idright); :}
+          | ID:id PAR_IZQ parametros:ps PAR_DER        {: sem.inicioMetodo(id, ps, idleft, idright); :}
+            cuerpo                                     {: sem.finRutina(); :}
+          ;
+
+/* ================= Expresiones ================= */
+
+expresion ::= expresion:a OR:o expresion:b                {: RESULT = sem.binaria("||",  a, b, oleft, oright); :}
+            | expresion:a AND:o expresion:b               {: RESULT = sem.binaria("&&",  a, b, oleft, oright); :}
+            | expresion:a IGUAL_IGUAL:o expresion:b       {: RESULT = sem.binaria("==",  a, b, oleft, oright); :}
+            | expresion:a DISTINTO:o expresion:b          {: RESULT = sem.binaria("!=",  a, b, oleft, oright); :}
+            | expresion:a IGUAL_ESTRICTO:o expresion:b    {: RESULT = sem.binaria("===", a, b, oleft, oright); :}
+            | expresion:a DISTINTO_ESTRICTO:o expresion:b {: RESULT = sem.binaria("!==", a, b, oleft, oright); :}
+            | expresion:a MENOR:o expresion:b             {: RESULT = sem.binaria("<",   a, b, oleft, oright); :}
+            | expresion:a MAYOR:o expresion:b             {: RESULT = sem.binaria(">",   a, b, oleft, oright); :}
+            | expresion:a MENOR_IGUAL:o expresion:b       {: RESULT = sem.binaria("<=",  a, b, oleft, oright); :}
+            | expresion:a MAYOR_IGUAL:o expresion:b       {: RESULT = sem.binaria(">=",  a, b, oleft, oright); :}
+            | expresion:a MAS:o expresion:b               {: RESULT = sem.binaria("+",   a, b, oleft, oright); :}
+            | expresion:a MENOS:o expresion:b             {: RESULT = sem.binaria("-",   a, b, oleft, oright); :}
+            | expresion:a POR:o expresion:b               {: RESULT = sem.binaria("*",   a, b, oleft, oright); :}
+            | expresion:a DIV:o expresion:b               {: RESULT = sem.binaria("/",   a, b, oleft, oright); :}
+            | expresion:a MOD:o expresion:b               {: RESULT = sem.binaria("%",   a, b, oleft, oright); :}
+            | MENOS:o expresion:a                         {: RESULT = sem.unaria("-", a, oleft, oright); :} %prec UMENOS
+            | NOT:o expresion:a                           {: RESULT = sem.unaria("!", a, oleft, oright); :}
+            | PAR_IZQ expresion:e PAR_DER                 {: RESULT = e; :}
+            | ID:id                                       {: RESULT = sem.usoVariable(id, idleft, idright); :}
+            | acceso:a                                    {: RESULT = sem.usoMiembro(a[0], a[1], aleft, aright); :}
+            | llamada:l                                   {: RESULT = l; :}
+            | NEW:n ID:id PAR_IZQ argumentos:args PAR_DER {: RESULT = sem.nuevoObjeto(id, args, nleft, nright); :}
+            | LITERAL_NUM:n                               {: RESULT = sem.literal(TipoDato.NUMBER, n); :}
+            | LITERAL_STR:s                               {: RESULT = sem.literal(TipoDato.STRING, s); :}
+            | LITERAL_BOOL:b                              {: RESULT = sem.literal(TipoDato.BOOLEAN, b); :}
+            ;
