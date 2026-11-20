@@ -1,0 +1,23 @@
+# ==========================================================
+# ARCHIVO EJECUTABLE GENERADO - COMPILADOR ACT 15
+# ==========================================================
+[HEADER]
+MAGIC_NUMBER   = 0x7F434D50 (CMP15)
+ARCHITECTURE   = RISC-32-SIM
+ENTRY_POINT    = 0x1000
+CODE_SIZE      = 20 bytes
+DATA_SIZE      = 16 bytes
+RUNTIME_LIBS   = libmath_rt.so, libio_rt.so
+
+[SYMBOL_TABLE]
+a            DATOS      0x2000
+b            DATOS      0x2004
+c            DATOS      0x2008
+result       SALIDA     0x3000
+
+[CODE_SEGMENT]
+0x1000: 01 01 2000  ; LOAD   R1, a
+0x1004: 03 01 2004  ; ADD    R1, b
+0x1008: 03 01 2008  ; ADD    R1, c
+0x100C: 02 01 3000  ; STORE  result, R1
+0x1010: FF 00 0000  ; HALT
